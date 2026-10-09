@@ -1,6 +1,6 @@
 // Chistaco offline support: the page is fetched fresh when online (so new jokes appear),
 // everything else (icons, audios) is served from the cache after the first play.
-const CACHE = "chistaco-v1";
+const CACHE = "chistaco-v2";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
@@ -12,7 +12,7 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
   if (req.headers.has("range")) return; // let the browser stream audio normally
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put("./", c)); return r; })
+    e.respondWith(fetch(req.url, {cache: "no-cache"}).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put("./", c)); return r; })
       .catch(() => caches.match("./")));
     return;
   }

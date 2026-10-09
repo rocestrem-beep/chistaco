@@ -402,7 +402,13 @@ render();
   addEventListener("appinstalled", () => { box.innerHTML=""; });
   show();
 })();
-if("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+if("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js", {updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}));
+/* An installed app on the phone resumes instead of restarting: after a while in the background, reload to pick up new jokes. */
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if(document.hidden){ hiddenAt = Date.now(); return; }
+  if(hiddenAt && Date.now()-hiddenAt > 5*60*1000 && !playing) location.reload();
+});
 </script>
 </body>
 </html>
