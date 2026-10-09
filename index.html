@@ -72,14 +72,14 @@ h1.view{font-size:1.6rem;font-weight:700;margin:4px 0 4px;text-wrap:balance}
 .save{border:none;background:none;color:var(--muted);width:40px;height:40px;display:grid;place-items:center;cursor:pointer;border-radius:10px}
 .save svg{width:22px;height:22px}
 .save[aria-pressed="true"]{color:var(--accent)}
-.share{color:var(--muted);width:40px;height:40px;display:grid;place-items:center;border-radius:10px;text-decoration:none}
+.share{border:none;background:none;cursor:pointer;color:var(--muted);width:40px;height:40px;display:grid;place-items:center;border-radius:10px;text-decoration:none}
 .share svg{width:22px;height:22px}
 .hero .actions{grid-column:1/-1;margin-top:10px;display:flex;gap:8px}
 .hero .hsave{font:inherit;font-weight:600;font-size:.92rem;color:var(--ink);background:none;border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
 .hero .hsave svg{width:18px;height:18px}
 .hero .hsave[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
 .hero .hsave[aria-pressed="true"] svg path{fill:currentColor}
-.hero .wa{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:.92rem;color:var(--ink);text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.hero .wa{font:inherit;background:none;cursor:pointer;flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:.92rem;color:var(--ink);text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
 .hero .wa svg{width:18px;height:18px}
 .save[aria-pressed="true"] svg path{fill:currentColor}
 
@@ -283,7 +283,7 @@ function row(j){
   return `<li>
     <button class="play" type="button" data-play="${j.id}"></button>
     <div class="info"><div class="t">${esc(j.t)}</div><div class="m">${meta(j)}</div><button class="explain" type="button" data-explain="${j.id}">¿Te lo explico?</button></div>
-    <a class="share" href="${wa(j)}" target="_blank" rel="noopener" aria-label="Compartir ${esc(j.t)} por WhatsApp">${ICON_SHARE}</a>
+    <button class="share" type="button" data-share="${j.id}" aria-label="Compartir el audio de ${esc(j.t)}">${ICON_SHARE}</button>
     <button class="save" type="button" data-save="${j.id}" aria-pressed="${saved.has(j.id)}" aria-label="Guardar ${esc(j.t)}">${ICON_SAVE}</button>
   </li>`;
 }
@@ -303,7 +303,7 @@ function render(){
         <button class="bigplay" type="button" data-play="${d.id}"></button>
         <span class="m">${meta(d)}</span>
         <div class="actions">
-          <a class="wa" href="${wa(d)}" target="_blank" rel="noopener">${ICON_SHARE} Compartir</a>
+          <button class="wa" type="button" data-share="${d.id}">${ICON_SHARE} Compartir</button>
           <button class="hsave" type="button" data-save="${d.id}" data-hero="1" aria-pressed="${saved.has(d.id)}">${ICON_SAVE} ${saved.has(d.id)?"Guardado":"Guardar"}</button>
         </div>
         <button class="hexp" type="button" data-explain="${d.id}">¿Necesitas que te lo explique?</button>
@@ -363,7 +363,26 @@ function closeExplain(){
 $("sheetClose").onclick = closeExplain;
 $("sheetBg").onclick = closeExplain;
 addEventListener("keydown", e => { if(e.key==="Escape" && !$("sheet").hidden) closeExplain(); });
+/* ---------- share the audio file itself (falls back to a WhatsApp text link) ---------- */
+const blobs = new Map();
+function prefetch(j){
+  if(!j || !j.audio || blobs.has(j.id)) return;
+  blobs.set(j.id, fetch(j.audio).then(r=>r.ok?r.blob():null).catch(()=>null));
+}
+async function shareJoke(id){
+  const j = byId(id);
+  const fallback = () => window.open(wa(j), "_blank", "noopener");
+  if(!j.audio || !navigator.canShare) return fallback();
+  prefetch(j);
+  const blob = await blobs.get(j.id);
+  if(!blob) return fallback();
+  const file = new File([blob], "Chistaco - " + j.t + ".mp3", {type:"audio/mpeg"});
+  if(!navigator.canShare({files:[file]})) return fallback();
+  try { await navigator.share({files:[file]}); }
+  catch(e){ if(e && e.name !== "AbortError") fallback(); }
+}
 function bindRows(root){
+  root.querySelectorAll("[data-share]").forEach(b=>{ prefetch(byId(b.dataset.share)); b.onclick=()=>shareJoke(b.dataset.share); });
   root.querySelectorAll("[data-explain]").forEach(b=>b.onclick=()=>openExplain(b.dataset.explain));
   root.querySelectorAll("[data-play]").forEach(b=>b.onclick=()=>toggle(b.dataset.play));
   root.querySelectorAll("[data-save]").forEach(b=>b.onclick=()=>{
