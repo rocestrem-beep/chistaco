@@ -111,6 +111,23 @@ nav.tabs{display:grid;grid-template-columns:repeat(4,1fr)}
 .tab[aria-current="page"]{color:var(--ink)}
 .tab[aria-current="page"] svg{stroke:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* Explanation button + bottom sheet */
+.explain{font:inherit;font-size:.8rem;font-weight:600;color:var(--ink);background:none;border:none;padding:4px 0 0;cursor:pointer;text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:3px}
+.hero .hexp{grid-column:1/-1;font:inherit;font-weight:600;font-size:.92rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:11px 14px;cursor:pointer}
+.sheet{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet-bg{position:absolute;inset:0;background:rgba(10,10,14,.5);animation:fade .2s ease-out}
+.sheet-card{position:relative;width:100%;max-width:560px;background:var(--surface);border-radius:22px 22px 0 0;padding:10px 20px calc(26px + env(safe-area-inset-bottom,0px));animation:up .28s cubic-bezier(.2,.8,.2,1)}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 16px}
+.sheet .x{position:absolute;top:12px;right:12px;width:36px;height:36px;border:none;border-radius:50%;background:var(--bg);color:var(--muted);font-size:1.3rem;line-height:1;cursor:pointer}
+.sheet .eb{margin:0;font-size:.75rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.09em}
+.sheet .st{margin:6px 0 2px;font-size:1.35rem;font-weight:700;line-height:1.2}
+.sheet .sm{margin:0;color:var(--muted);font-size:.9rem}
+.sheet .srow{display:flex;align-items:center;gap:16px;margin-top:20px}
+.sheet .note{margin:18px 0 0;padding:14px 16px;border-radius:14px;background:var(--bg);color:var(--muted);font-size:.9rem}
+@keyframes up{from{transform:translateY(100%)}}
+@keyframes fade{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.sheet-card,.sheet-bg{animation:none}}
 body{margin:0;-webkit-tap-highlight-color:transparent}
 .app{padding-top:calc(16px + env(safe-area-inset-top,0px))}
 /* Install card (only in the browser, not once installed) */
@@ -153,14 +170,23 @@ body{margin:0;-webkit-tap-highlight-color:transparent}
   </div>
 </div>
 
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-label="Explicación del chiste">
+  <div class="sheet-bg" id="sheetBg"></div>
+  <div class="sheet-card">
+    <div class="grab"></div>
+    <button class="x" id="sheetClose" type="button" aria-label="Cerrar">×</button>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
 <script>
-/* Jokes. audio: path of the recording published with the app (null = not recorded yet, the phone reads the text). */
+/* Jokes. exp: path of the recorded explanation (null = not recorded yet). audio: path of the recording published with the app (null = not recorded yet, the phone reads the text). */
 const J = [
-  {id:"adoptado", t:"El adoptado", cat:"Humor negro", top:true, audio:"audios/adoptado.mp3",
+  {id:"adoptado", t:"El adoptado", cat:"Humor negro", top:true, audio:"audios/adoptado.mp3", exp:null,
    text:"—Papá, ¿yo soy adoptado?\n—Hijo, te escogimos negro para no hablar del tema."},
-  {id:"notaria", t:"La notaría", cat:"Juegos de palabras", top:true, audio:"audios/notaria.mp3",
+  {id:"notaria", t:"La notaría", cat:"Juegos de palabras", top:true, audio:"audios/notaria.mp3", exp:null,
    text:"—Perdona, ¿la notaría?\n—Si te arrimas un poco, tal vez sí."},
-  {id:"nostalgicos", t:"Asociación de nostálgicos", cat:"Asociaciones", top:false, audio:"audios/nostalgicos.mp3",
+  {id:"nostalgicos", t:"Asociación de nostálgicos", cat:"Asociaciones", top:false, audio:"audios/nostalgicos.mp3", exp:null,
    text:"Asociación de nostálgicos"}
 ];
 const CATS = [
@@ -194,7 +220,10 @@ let voice = null;
 function pickVoice(){ if(!synth) return; const vs=synth.getVoices(); voice = vs.find(v=>v.lang==="es-ES")||vs.find(v=>/^es/i.test(v.lang))||null; }
 if(synth){ pickVoice(); synth.onvoiceschanged = pickVoice; }
 
-const byId = id => J.find(j=>j.id===id);
+const byId = id => {
+  if(id.endsWith(":exp")){ const j = J.find(x=>x.id===id.slice(0,-4)); return j && {id, t:"Explicación · "+j.t, audio:j.exp, text:""}; }
+  return J.find(j=>j.id===id);
+};
 const fmt = s => { s=Math.max(0,Math.floor(s||0)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
 function dayPick(){ const d=new Date(); const n=Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/864e5); return J[n % J.length]; }
 
@@ -253,7 +282,7 @@ function meta(j){ return esc(j.cat) + (j.audio ? "" : " · voz provisional"); }
 function row(j){
   return `<li>
     <button class="play" type="button" data-play="${j.id}"></button>
-    <div class="info"><div class="t">${esc(j.t)}</div><div class="m">${meta(j)}</div></div>
+    <div class="info"><div class="t">${esc(j.t)}</div><div class="m">${meta(j)}</div><button class="explain" type="button" data-explain="${j.id}">¿Te lo explico?</button></div>
     <a class="share" href="${wa(j)}" target="_blank" rel="noopener" aria-label="Compartir ${esc(j.t)} por WhatsApp">${ICON_SHARE}</a>
     <button class="save" type="button" data-save="${j.id}" aria-pressed="${saved.has(j.id)}" aria-label="Guardar ${esc(j.t)}">${ICON_SAVE}</button>
   </li>`;
@@ -277,6 +306,7 @@ function render(){
           <a class="wa" href="${wa(d)}" target="_blank" rel="noopener">${ICON_SHARE} Compartir</a>
           <button class="hsave" type="button" data-save="${d.id}" data-hero="1" aria-pressed="${saved.has(d.id)}">${ICON_SAVE} ${saved.has(d.id)?"Guardado":"Guardar"}</button>
         </div>
+        <button class="hexp" type="button" data-explain="${d.id}">¿Necesitas que te lo explique?</button>
       </section>
       <h2 class="sec">Los mejores</h2>
       ${list(best,"Todavía no hay destacados.")}
@@ -315,7 +345,26 @@ function render(){
   document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-current", t.dataset.tab===tab?"page":"false"));
   $("total").textContent = J.length + (J.length===1?" chiste":" chistes");
 }
+function openExplain(id){
+  const j = byId(id);
+  $("sheetBody").innerHTML = `<p class="eb">¿No lo has pillado?</p>
+    <p class="st">Te lo explico</p>
+    <p class="sm">${esc(j.t)}</p>` + (j.exp
+    ? `<div class="srow"><button class="bigplay" type="button" data-play="${j.id}:exp"></button><span class="sm">Escucha la explicación</span></div>`
+    : `<p class="note">La explicación de este chiste todavía no está grabada. De momento, tendrás que pillarlo solo.</p>`);
+  $("sheet").hidden = false;
+  bindRows($("sheetBody"));
+  $("sheetClose").focus();
+}
+function closeExplain(){
+  if(curId && curId.endsWith(":exp") && playing){ stopAll(); setState(false); }
+  $("sheet").hidden = true;
+}
+$("sheetClose").onclick = closeExplain;
+$("sheetBg").onclick = closeExplain;
+addEventListener("keydown", e => { if(e.key==="Escape" && !$("sheet").hidden) closeExplain(); });
 function bindRows(root){
+  root.querySelectorAll("[data-explain]").forEach(b=>b.onclick=()=>openExplain(b.dataset.explain));
   root.querySelectorAll("[data-play]").forEach(b=>b.onclick=()=>toggle(b.dataset.play));
   root.querySelectorAll("[data-save]").forEach(b=>b.onclick=()=>{
     const id=b.dataset.save; saved.has(id)?saved.delete(id):saved.add(id);
